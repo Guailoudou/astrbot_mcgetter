@@ -20,15 +20,12 @@ HELP_INFO = """
 /mchelp 
 --查看帮助
 
-/mc   
+/mc 服务器名称/ID/地址
 --查询保存的服务器
 
 /mcadd 服务器名称 服务器地址 [force]
 --添加要查询的服务器
 --force: 可选参数，设为True时跳过预查询检查强制添加
-
-/mcget 服务器名称/ID
---获取指定服务器的地址信息
 
 /mcdel 服务器名称/ID 
 --删除服务器
@@ -38,9 +35,6 @@ HELP_INFO = """
 
 /mclist
 --列出所有服务器及其ID
-
-/mccleanup
---手动触发自动清理（删除10天未查询成功的服务器）
 """
 
 @register("astrbot_mcgetter", "QiChen", "查询mc服务器信息和玩家列表,渲染为图片", "1.4.0")
@@ -114,14 +108,15 @@ class MyPlugin(Star):
             
             message_chain: List[Comp.Image] = []
             servers = json_data.get("servers", {})
-            
+            name = ""
             for server_id, server_info in servers.items():
                 if(server_info['name']==host or str(server_id)==host):
                     host = server_info["host"]
+                    name = server_info['name']
                     break
             try:
                 logger.info(f"正在处理服务器: {host} ")
-                mcinfo_img = await self.get_img(host, 0)
+                mcinfo_img = await self.get_img(name,host, 0)
                 if mcinfo_img:
                     message_chain.append(Comp.Image.fromBase64(mcinfo_img))
                     # logger.info(f"成功添加图片到消息链，服务器名称: {server_info['name']} (ID: {server_id})")
@@ -339,7 +334,7 @@ class MyPlugin(Star):
     #         logger.error(f"执行 mccleanup 命令时出错: {e}")
     #         yield event.plain_result("自动清理时发生错误")
 
-    async def get_img(self, host: str, server_id: Optional[str] = None, json_path: Optional[str] = None) -> Optional[str]:
+    async def get_img(self,name: str, host: str, server_id: Optional[str] = None, json_path: Optional[str] = None) -> Optional[str]:
         """
         获取服务器信息图片
 
@@ -352,7 +347,10 @@ class MyPlugin(Star):
         Returns:
             图片的base64编码字符串，如果获取失败则返回None
         """
-        server_name = host
+        if name == "":
+            server_name = host
+        else:
+            server_name = name
         logger.info(f"开始获取服务器 {server_name} 的图片，主机地址: {host}")
         try:
             info = await get_server_status(host)
