@@ -116,7 +116,7 @@ class MyPlugin(Star):
             servers = json_data.get("servers", {})
             
             for server_id, server_info in servers.items():
-                if(server_id==host):
+                if(server_info['name']==host or str(server_id)==host):
                     host = server_info["host"]
                     break
             try:
