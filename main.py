@@ -83,14 +83,14 @@ class MyPlugin(Star):
         """
         logger.info("开始执行 mc 命令")
         try:
-            # group_id = event.get_group_id()
-            # logger.info(f"获取到群组ID: {group_id}")
+            group_id = event.get_group_id()
+            logger.info(f"获取到群组ID: {group_id}")
             
-            # json_path = await self.get_json_path(group_id)
-            # logger.info(f"JSON文件路径: {json_path}")
+            json_path = await self.get_json_path(group_id)
+            logger.info(f"JSON文件路径: {json_path}")
             
-            # json_data = await read_json(json_path)
-            # logger.info(f"读取到的JSON数据: {json_data}")
+            json_data = await read_json(json_path)
+            logger.info(f"读取到的JSON数据: {json_data}")
             
             # if not json_data or not json_data.get("servers"):
             #     logger.warning("JSON数据为空或没有服务器")
@@ -113,12 +113,15 @@ class MyPlugin(Star):
             #         return
             
             message_chain: List[Comp.Image] = []
-            # servers = json_data.get("servers", {})
+            servers = json_data.get("servers", {})
             
-            # for server_id, server_info in servers.items():
+            for server_id, server_info in servers.items():
+                if(server_id==host):
+                    host = server_info["host"]
+                    break
             try:
                 logger.info(f"正在处理服务器: {host} ")
-                mcinfo_img = await self.get_img("mc", host, 0)
+                mcinfo_img = await self.get_img(host, 0)
                 if mcinfo_img:
                     message_chain.append(Comp.Image.fromBase64(mcinfo_img))
                     # logger.info(f"成功添加图片到消息链，服务器名称: {server_info['name']} (ID: {server_id})")
@@ -138,89 +141,89 @@ class MyPlugin(Star):
             logger.error(f"执行 mc 命令时出错: {e}")
             yield event.plain_result("查询服务器信息时发生错误")
 
-    # @filter.command("mcadd")
-    # async def mcadd(self, event: AstrMessageEvent, name: str, host: str, force: bool = False) -> MessageEventResult:
-    #     """
-    #     添加新的服务器
+    @filter.command("mcadd")
+    async def mcadd(self, event: AstrMessageEvent, name: str, host: str, force: bool = False) -> MessageEventResult:
+        """
+        添加新的服务器
 
-    #     Args:
-    #         event: 消息事件
-    #         name: 服务器名称
-    #         host: 服务器地址
-    #         force: 是否强制添加（跳过预查询检查）
+        Args:
+            event: 消息事件
+            name: 服务器名称
+            host: 服务器地址
+            force: 是否强制添加（跳过预查询检查）
 
-    #     Returns:
-    #         操作结果消息
-    #     """
-    #     logger.info(f"开始执行 mcadd 命令: {name} -> {host}, force: {force}")
+        Returns:
+            操作结果消息
+        """
+        logger.info(f"开始执行 mcadd 命令: {name} -> {host}, force: {force}")
         
-    #     try:
-    #         # 检查host合法性
-    #         if not re.match(r'^[a-zA-Z0-9.:-]+$', host):
-    #             yield event.plain_result("服务器地址格式不正确，只能包含字母、数字和符号.:-")
-    #             return
-    #         elif await get_server_status(host) is None and not force:
-    #             yield event.plain_result("预查询失败，请检查服务器是否在线或地址是否正确，或在完整的/mcadd命令后加上True 强制添加")
-    #             return
+        try:
+            # 检查host合法性
+            if not re.match(r'^[a-zA-Z0-9.:-]+$', host):
+                yield event.plain_result("服务器地址格式不正确，只能包含字母、数字和符号.:-")
+                return
+            elif await get_server_status(host) is None and not force:
+                yield event.plain_result("预查询失败，请检查服务器是否在线或地址是否正确，或在完整的/mcadd命令后加上True 强制添加")
+                return
                 
-    #         group_id = event.get_group_id()
-    #         json_path = await self.get_json_path(group_id)
+            group_id = event.get_group_id()
+            json_path = await self.get_json_path(group_id)
             
-    #         # 检查当前地址是否已存在
-    #         try:
-    #             json_data = await read_json(json_path)
-    #             servers = json_data.get("servers", {})
-    #             if servers:
-    #                 for server_id, server_info in servers.items():
-    #                     if server_info['host'] == host:
-    #                         yield event.plain_result(f"已存在相同地址的服务器 {server_info['name']} (ID: {server_id})")
-    #                         return
-    #         except Exception as e:
-    #             logger.error(f"检查服务器地址时出错: {e}")
-    #             yield event.plain_result("检查服务器地址时发生错误")
-    #             return
+            # 检查当前地址是否已存在
+            try:
+                json_data = await read_json(json_path)
+                servers = json_data.get("servers", {})
+                if servers:
+                    for server_id, server_info in servers.items():
+                        if server_info['host'] == host:
+                            yield event.plain_result(f"已存在相同地址的服务器 {server_info['name']} (ID: {server_id})")
+                            return
+            except Exception as e:
+                logger.error(f"检查服务器地址时出错: {e}")
+                yield event.plain_result("检查服务器地址时发生错误")
+                return
                 
-    #         if await add_data(json_path, name, host):
-    #             # 获取新添加的服务器ID
-    #             json_data = await read_json(json_path)
-    #             servers = json_data.get("servers", {})
-    #             for server_id, server_info in servers.items():
-    #                 if server_info['name'] == name and server_info['host'] == host:
-    #                     yield event.plain_result(f"成功添加服务器 {name} (ID: {server_id})")
-    #                     return
-    #             yield event.plain_result(f"成功添加服务器 {name}")
-    #         else:
-    #             yield event.plain_result(f"无法添加 {name}，请检查是否已存在")
+            if await add_data(json_path, name, host):
+                # 获取新添加的服务器ID
+                json_data = await read_json(json_path)
+                servers = json_data.get("servers", {})
+                for server_id, server_info in servers.items():
+                    if server_info['name'] == name and server_info['host'] == host:
+                        yield event.plain_result(f"成功添加服务器 {name} (ID: {server_id})")
+                        return
+                yield event.plain_result(f"成功添加服务器 {name}")
+            else:
+                yield event.plain_result(f"无法添加 {name}，请检查是否已存在")
                 
-    #     except Exception as e:
-    #         logger.error(f"执行 mcadd 命令时出错: {e}")
-    #         yield event.plain_result("添加服务器时发生错误")
+        except Exception as e:
+            logger.error(f"执行 mcadd 命令时出错: {e}")
+            yield event.plain_result("添加服务器时发生错误")
 
-    # @filter.command("mcdel")
-    # async def mcdel(self, event: AstrMessageEvent, identifier: str) -> MessageEventResult:
-    #     """
-    #     删除指定的服务器（支持通过名称或ID删除）
+    @filter.command("mcdel")
+    async def mcdel(self, event: AstrMessageEvent, identifier: str) -> MessageEventResult:
+        """
+        删除指定的服务器（支持通过名称或ID删除）
 
-    #     Args:
-    #         event: 消息事件
-    #         identifier: 要删除的服务器名称或ID
+        Args:
+            event: 消息事件
+            identifier: 要删除的服务器名称或ID
 
-    #     Returns:
-    #         操作结果消息
-    #     """
-    #     logger.info(f"开始执行 mcdel 命令: {identifier}")
-    #     try:
-    #         group_id = event.get_group_id()
-    #         json_path = await self.get_json_path(group_id)
+        Returns:
+            操作结果消息
+        """
+        logger.info(f"开始执行 mcdel 命令: {identifier}")
+        try:
+            group_id = event.get_group_id()
+            json_path = await self.get_json_path(group_id)
             
-    #         if await del_data(json_path, identifier):
-    #             yield event.plain_result(f"成功删除服务器 {identifier}")
-    #         else:
-    #             yield event.plain_result(f"无法删除 {identifier}，请检查是否存在")
+            if await del_data(json_path, identifier):
+                yield event.plain_result(f"成功删除服务器 {identifier}")
+            else:
+                yield event.plain_result(f"无法删除 {identifier}，请检查是否存在")
                 
-    #     except Exception as e:
-    #         logger.error(f"执行 mcdel 命令时出错: {e}")
-    #         yield event.plain_result("删除服务器时发生错误")
+        except Exception as e:
+            logger.error(f"执行 mcdel 命令时出错: {e}")
+            yield event.plain_result("删除服务器时发生错误")
 
     # @filter.command("mcget")
     # async def mcget(self, event: AstrMessageEvent, identifier: str) -> MessageEventResult:
@@ -244,73 +247,73 @@ class MyPlugin(Star):
     #         logger.error(f"执行 mcget 命令时出错: {e}")
     #         yield event.plain_result("获取服务器信息时发生错误")
 
-    # @filter.command("mcup")
-    # async def mcup(self, event: AstrMessageEvent, identifier: str, new_name: Optional[str] = None, new_host: Optional[str] = None) -> MessageEventResult:
-    #     """
-    #     更新服务器信息（支持通过名称或ID更新）
+    @filter.command("mcup")
+    async def mcup(self, event: AstrMessageEvent, identifier: str, new_name: Optional[str] = None, new_host: Optional[str] = None) -> MessageEventResult:
+        """
+        更新服务器信息（支持通过名称或ID更新）
 
-    #     Args:
-    #         event: 消息事件
-    #         identifier: 要更新的服务器名称或ID
-    #         new_name: 新的服务器名称（可选）
-    #         new_host: 新的服务器地址（可选）
+        Args:
+            event: 消息事件
+            identifier: 要更新的服务器名称或ID
+            new_name: 新的服务器名称（可选）
+            new_host: 新的服务器地址（可选）
 
-    #     Returns:
-    #         操作结果消息
-    #     """
-    #     logger.info(f"开始执行 mcup 命令: {identifier}, new_name: {new_name}, new_host: {new_host}")
+        Returns:
+            操作结果消息
+        """
+        logger.info(f"开始执行 mcup 命令: {identifier}, new_name: {new_name}, new_host: {new_host}")
         
-    #     try:
-    #         if not new_name and not new_host:
-    #             yield event.plain_result("请提供要更新的信息（新名称或新地址）")
-    #             return
+        try:
+            if not new_name and not new_host:
+                yield event.plain_result("请提供要更新的信息（新名称或新地址）")
+                return
                 
-    #         # 如果提供了新地址，检查格式
-    #         if new_host and not re.match(r'^[a-zA-Z0-9.:-]+$', new_host):
-    #             yield event.plain_result("服务器地址格式不正确，只能包含字母、数字和符号.:-")
-    #             return
+            # 如果提供了新地址，检查格式
+            if new_host and not re.match(r'^[a-zA-Z0-9.:-]+$', new_host):
+                yield event.plain_result("服务器地址格式不正确，只能包含字母、数字和符号.:-")
+                return
                 
-    #         group_id = event.get_group_id()
-    #         json_path = await self.get_json_path(group_id)
+            group_id = event.get_group_id()
+            json_path = await self.get_json_path(group_id)
             
-    #         if await update_data(json_path, identifier, new_name, new_host):
-    #             # 获取更新后的服务器信息
-    #             updated_info = await get_server_info(json_path, identifier)
-    #             if updated_info:
-    #                 yield event.plain_result(f"成功更新服务器信息: {updated_info['name']} (ID: {updated_info['id']})")
-    #             else:
-    #                 yield event.plain_result(f"成功更新服务器 {identifier}")
-    #         else:
-    #             yield event.plain_result(f"无法更新 {identifier}，请检查是否存在或名称是否冲突")
+            if await update_data(json_path, identifier, new_name, new_host):
+                # 获取更新后的服务器信息
+                updated_info = await get_server_info(json_path, identifier)
+                if updated_info:
+                    yield event.plain_result(f"成功更新服务器信息: {updated_info['name']} (ID: {updated_info['id']})")
+                else:
+                    yield event.plain_result(f"成功更新服务器 {identifier}")
+            else:
+                yield event.plain_result(f"无法更新 {identifier}，请检查是否存在或名称是否冲突")
                 
-    #     except Exception as e:
-    #         logger.error(f"执行 mcup 命令时出错: {e}")
-    #         yield event.plain_result("更新服务器信息时发生错误")
+        except Exception as e:
+            logger.error(f"执行 mcup 命令时出错: {e}")
+            yield event.plain_result("更新服务器信息时发生错误")
 
-    # @filter.command("mclist")
-    # async def mclist(self, event: AstrMessageEvent) -> MessageEventResult:
-    #     """
-    #     列出所有服务器及其ID
-    #     """
-    #     logger.info("开始执行 mclist 命令")
-    #     try:
-    #         group_id = event.get_group_id()
-    #         json_path = await self.get_json_path(group_id)
+    @filter.command("mclist")
+    async def mclist(self, event: AstrMessageEvent) -> MessageEventResult:
+        """
+        列出所有服务器及其ID
+        """
+        logger.info("开始执行 mclist 命令")
+        try:
+            group_id = event.get_group_id()
+            json_path = await self.get_json_path(group_id)
             
-    #         servers = await get_all_servers(json_path)
-    #         if not servers:
-    #             yield event.plain_result("没有保存的服务器")
-    #             return
+            servers = await get_all_servers(json_path)
+            if not servers:
+                yield event.plain_result("没有保存的服务器")
+                return
                 
-    #         server_list = "当前保存的服务器列表:\n"
-    #         for server_id, server_info in servers.items():
-    #             server_list += f"ID: {server_id}, 名称: {server_info['name']}, 地址: {server_info['host']}\n"
+            server_list = "当前保存的服务器列表:\n"
+            for server_id, server_info in servers.items():
+                server_list += f"ID: {server_id}, 名称: {server_info['name']}, 地址: {server_info['host']}\n"
                 
-    #         yield event.plain_result(server_list.strip())
+            yield event.plain_result(server_list.strip())
             
-    #     except Exception as e:
-    #         logger.error(f"执行 mclist 命令时出错: {e}")
-    #         yield event.plain_result("获取服务器列表时发生错误")
+        except Exception as e:
+            logger.error(f"执行 mclist 命令时出错: {e}")
+            yield event.plain_result("获取服务器列表时发生错误")
 
     # @filter.command("mccleanup")
     # async def mccleanup(self, event: AstrMessageEvent) -> MessageEventResult:
@@ -336,7 +339,7 @@ class MyPlugin(Star):
     #         logger.error(f"执行 mccleanup 命令时出错: {e}")
     #         yield event.plain_result("自动清理时发生错误")
 
-    async def get_img(self, server_name: str, host: str, server_id: Optional[str] = None, json_path: Optional[str] = None) -> Optional[str]:
+    async def get_img(self, host: str, server_id: Optional[str] = None, json_path: Optional[str] = None) -> Optional[str]:
         """
         获取服务器信息图片
 
@@ -349,6 +352,7 @@ class MyPlugin(Star):
         Returns:
             图片的base64编码字符串，如果获取失败则返回None
         """
+        server_name = host
         logger.info(f"开始获取服务器 {server_name} 的图片，主机地址: {host}")
         try:
             info = await get_server_status(host)
