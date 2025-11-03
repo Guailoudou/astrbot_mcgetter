@@ -17,11 +17,13 @@ async def get_server_status(host):
         server = await JavaServer.async_lookup(host)
         # 使用异步方法查询服务器状态
         status = await server.async_status()
+        logger.info(f"获取服务器信息成功: {host} : {status}")
         players_list = []
         latency = int(status.latency)
         plays_max = status.players.max
         plays_online = status.players.online
         server_version = status.version.name
+        # motd = status.motd
 
         # 保存服务器图标
         if status.icon:

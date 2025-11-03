@@ -124,7 +124,7 @@ async def generate_server_info_image(
             draw.text((text_x + 20, base_y), players_line, font=small_font, fill=TEXT_COLOR)
             base_y += line_height
     else:
-        draw.text((text_x + 20, base_y), "暂无玩家在线", font=small_font, fill=TEXT_COLOR)
+        draw.text((text_x + 20, base_y), "未获取到玩家数据", font=small_font, fill=TEXT_COLOR)
         base_y += line_height
     
     draw.rounded_rectangle([10, 10, img.width-10, img.height-10], radius=10, outline=ACCENT_COLOR, width=2)
