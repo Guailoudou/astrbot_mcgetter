@@ -4,6 +4,7 @@ import io,re
 from pathlib import Path
 import base64
 from typing import Optional
+from typing import Optional, List, Tuple
 
 async def load_font(font_size):
     # 尝试多路径加载
@@ -17,7 +18,7 @@ async def load_font(font_size):
     
     for path in font_paths:
         try:
-            return ImageFont.truetype(path, font_size)
+            return ImageFont.truetype(str(path), font_size)
         except OSError:
             continue
     
@@ -27,11 +28,6 @@ async def load_font(font_size):
         return ImageFont.load_default().font_variant(size=font_size)
     except:
         return ImageFont.load_default()
-
-# 在代码中替换字体加载部分
-title_font = load_font(30)
-text_font = load_font(20)
-small_font = load_font(18)
 
 async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]:
     """处理Base64编码的服务器图标"""
@@ -48,25 +44,23 @@ async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]
         print(f"Base64图标解码失败: {str(e)}")
         return None
 
-
-
-from typing import Optional, List, Tuple
-
 from PIL import Image, ImageDraw, ImageFont,ImageColor
 from PIL.Image import Image as PILImage
+
 def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     """解析 MOTD 颜色代码，返回 (文本, RGB) 列表"""
     if not motd.strip():
         return [("无服务器描述", (150, 150, 150))]
 
     color_map = {
-        '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
-        '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
-        '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
-        'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF',
-        'r': '#FFFFFF'
+        '0': (0, 0, 0), '1': (0, 0, 170), '2': (0, 170, 0), '3': (0, 170, 170),
+        '4': (170, 0, 0), '5': (170, 0, 170), '6': (255, 170, 0), '7': (170, 170, 170),
+        '8': (85, 85, 85), '9': (85, 85, 255), 'a': (85, 255, 85), 'b': (85, 255, 255),
+        'c': (255, 85, 85), 'd': (255, 85, 255), 'e': (255, 255, 85), 'f': (255, 255, 255),
+        'r': (255, 255, 255)  # 重置为白色
     }
 
+    # 分割行
     lines = motd.split('\n')
     result = []
 
@@ -75,24 +69,22 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
             result.append(("", (255, 255, 255)))
             continue
 
-        parts = re.findall(r'§([0-9a-f])|([^§]+)', line)
-        current_color = color_map.get('f', '#FFFFFF')
-        text_buffer = ""
-
-        for code, text in parts:
-            if code:
-                if text_buffer:
-                    rgb = ImageColor.getrgb(current_color)
-                    result.append((text_buffer, rgb))
-                    text_buffer = ""
-                current_color = color_map.get(code, '#FFFFFF')
+        # 使用正则表达式分割，保留分隔符
+        parts = re.split(r'(§[0-9a-fr])', line)
+        
+        current_color = (255, 255, 255)  # 默认白色
+        
+        for part in parts:
+            if part.startswith('§'):
+                # 这是一个颜色代码
+                color_code = part[1]  # 获取颜色字符
+                if color_code in color_map:
+                    current_color = color_map[color_code]
             else:
-                text_buffer += text
-
-        if text_buffer:
-            rgb = ImageColor.getrgb(current_color)
-            result.append((text_buffer, rgb))
-
+                # 这是文本内容
+                if part:
+                    result.append((part, current_color))
+    
     return result
 
 
@@ -155,21 +147,26 @@ async def generate_server_info_image(
     # === 每个段单独换行（保留颜色）===
     wrapped_lines = []  # [(line_text, color), ...]
     current_line = ""
-    current_color = None
+    current_color = (255, 255, 255)
 
     for text, color in motd_segments:
         if text == "":
             if current_line:
                 wrapped_lines.append((current_line, current_color))
                 current_line = ""
-            wrapped_lines.append(("", None))  # 空行
-            current_color = None
+            wrapped_lines.append(("", (255, 255, 255)))  # 空行
+            current_color = (255, 255, 255)
         else:
             # 添加到当前行
             new_line = current_line + text
-            bbox = temp_draw.textbbox((0, 0), new_line, font=motd_font)
-            width = bbox[2] - bbox[0]
-            if width <= motd_max_width:
+            try:
+                bbox = temp_draw.textbbox((0, 0), new_line, font=motd_font)
+                text_width = bbox[2] - bbox[0]
+            except:
+                # 如果字体有问题，使用简单长度估算
+                text_width = len(new_line) * 12  # 估算字符宽度
+            
+            if text_width <= motd_max_width:
                 current_line = new_line
                 current_color = color
             else:
@@ -283,3 +280,6 @@ async def generate_server_info_image(
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+
