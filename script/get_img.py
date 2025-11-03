@@ -60,38 +60,39 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
         return [("无服务器描述", (150, 150, 150))]
 
     color_map = {
-        '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
-        '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
-        '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
-        'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF',
-        'r': '#FFFFFF'
+        '0': (0, 0, 0), '1': (0, 0, 170), '2': (0, 170, 0), '3': (0, 170, 170),
+        '4': (170, 0, 0), '5': (170, 0, 170), '6': (255, 170, 0), '7': (170, 170, 170),
+        '8': (85, 85, 85), '9': (85, 85, 255), 'a': (85, 255, 85), 'b': (85, 255, 255),
+        'c': (255, 85, 85), 'd': (255, 85, 255), 'e': (255, 255, 85), 'f': (255, 255, 255),
+        'r': (255, 255, 255)
     }
 
-    lines = motd.split('\n')
     result = []
-
-    for line in lines:
-        if not line.strip():
-            result.append(("", (255, 255, 255)))
+    current_color = color_map['f']
+    
+    # 使用split方式处理
+    segments = re.split(r'(§[0-9a-fr]§?)', motd)
+    
+    for segment in segments:
+        if not segment:
             continue
-
-        # 修改正则表达式，使其能正确捕获所有情况
-        parts = re.findall(r'§([0-9a-fr])|([^§]+)|§', line)
-        current_color = color_map.get('f', '#FFFFFF')
-
-        for code, text, invalid in parts:
-            if invalid:  # 处理无效的§字符
-                result.append(("§", ImageColor.getrgb(current_color)))
-            elif code:  # 处理颜色代码
+            
+        if segment.startswith('§'):
+            if len(segment) >= 2 and segment[1] in color_map:
+                # 是颜色代码
+                code = segment[1]
                 if code == 'r':
-                    current_color = color_map['f']  # 重置为默认白色
+                    current_color = color_map['f']
                 else:
-                    current_color = color_map.get(code, '#FFFFFF')
-            elif text:  # 处理普通文本
-                rgb = ImageColor.getrgb(current_color)
-                result.append((text, rgb))
-
-    return result
+                    current_color = color_map[code]
+            else:
+                # 单独的§符号
+                result.append(("§", current_color))
+        else:
+            # 普通文本
+            result.append((segment, current_color))
+            
+    return result if result else [("无服务器描述", (150, 150, 150))]
 
 
 # ========================
