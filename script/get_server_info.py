@@ -23,7 +23,7 @@ async def get_server_status(host):
         plays_max = status.players.max
         plays_online = status.players.online
         server_version = status.version.name
-        motd_html = status.motd.simplify().to_ansi()
+        motd_html = status.motd.simplify().to_minecraft()
         logger.info(f"获取服务器motd成功: {motd_html}")
         # 保存服务器图标
         if status.icon:
