@@ -96,39 +96,8 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     return result
 
 
-def wrap_line_by_width(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    max_width: int
-) -> List[str]:
-    """将一段文本按最大宽度自动换行（支持中英文）"""
-    if not text:
-        return [""]
-
-    # 使用空格或中文字符作为断点尝试换行
-    words = re.findall(r'\S+|\s+', text)  # 单词或空格
-    lines = []
-    current_line = ""
-
-    for word in words:
-        test_line = current_line + word
-        bbox = draw.textbbox((0, 0), test_line, font=font)
-        width = bbox[2] - bbox[0]
-        if width <= max_width:
-            current_line = test_line
-        else:
-            if current_line:
-                lines.append(current_line)
-            current_line = word  # 新行开始
-    if current_line:
-        lines.append(current_line)
-
-    return lines
-
-
 # ========================
-# 主函数：生成服务器信息图（修复换行与布局）
+# 主函数：生成服务器信息图（最终版）
 # ========================
 
 async def generate_server_info_image(
@@ -183,7 +152,7 @@ async def generate_server_info_image(
     line_height = 32
     motd_max_width = width - 2 * padding_x - 20  # 卡片内可用宽度
 
-    # === 合并颜色段并换行 ===
+    # === 每个段单独换行（保留颜色）===
     wrapped_lines = []  # [(line_text, color), ...]
     current_line = ""
     current_color = None
@@ -198,23 +167,23 @@ async def generate_server_info_image(
         else:
             # 添加到当前行
             new_line = current_line + text
-            # 测试是否需要换行
             bbox = temp_draw.textbbox((0, 0), new_line, font=motd_font)
-            if bbox[2] - bbox[0] > motd_max_width:
-                # 需要换行
+            width = bbox[2] - bbox[0]
+            if width <= motd_max_width:
+                current_line = new_line
+                current_color = color
+            else:
+                # 换行
                 if current_line:
                     wrapped_lines.append((current_line, current_color))
                 current_line = text
-                current_color = color
-            else:
-                current_line = new_line
                 current_color = color
 
     # 提交最后一行
     if current_line:
         wrapped_lines.append((current_line, current_color))
 
-    # === 计算 MOTD 高度（动态）===
+    # === 计算 MOTD 高度 ===
     motd_height = len(wrapped_lines) * line_height + 20
 
     # === 玩家列表高度 ===
