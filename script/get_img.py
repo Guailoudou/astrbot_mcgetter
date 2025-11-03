@@ -60,39 +60,40 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
         return [("无服务器描述", (150, 150, 150))]
 
     color_map = {
-        '0': (0, 0, 0), '1': (0, 0, 170), '2': (0, 170, 0), '3': (0, 170, 170),
-        '4': (170, 0, 0), '5': (170, 0, 170), '6': (255, 170, 0), '7': (170, 170, 170),
-        '8': (85, 85, 85), '9': (85, 85, 255), 'a': (85, 255, 85), 'b': (85, 255, 255),
-        'c': (255, 85, 85), 'd': (255, 85, 255), 'e': (255, 255, 85), 'f': (255, 255, 255),
-        'r': (255, 255, 255)
+        '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
+        '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
+        '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
+        'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF',
+        'r': '#FFFFFF'
     }
 
+    lines = motd.split('\n')
     result = []
-    current_color = color_map['f']
-    
-    # 使用split方式处理
-    segments = re.split(r'(§[0-9a-fr]§?)', motd)
-    
-    for segment in segments:
-        if not segment:
+
+    for line in lines:
+        if not line.strip():
+            result.append(("", (255, 255, 255)))
             continue
-            
-        if segment.startswith('§'):
-            if len(segment) >= 2 and segment[1] in color_map:
-                # 是颜色代码
-                code = segment[1]
-                if code == 'r':
-                    current_color = color_map['f']
-                else:
-                    current_color = color_map[code]
+
+        parts = re.findall(r'§([0-9a-f])|([^§]+)', line)
+        current_color = color_map.get('f', '#FFFFFF')
+        text_buffer = ""
+
+        for code, text in parts:
+            if code:
+                if text_buffer:
+                    rgb = ImageColor.getrgb(current_color)
+                    result.append((text_buffer, rgb))
+                    text_buffer = ""
+                current_color = color_map.get(code, '#FFFFFF')
             else:
-                # 单独的§符号
-                result.append(("§", current_color))
-        else:
-            # 普通文本
-            result.append((segment, current_color))
-            
-    return result if result else [("无服务器描述", (150, 150, 150))]
+                text_buffer += text
+
+        if text_buffer:
+            rgb = ImageColor.getrgb(current_color)
+            result.append((text_buffer, rgb))
+
+    return result
 
 
 # ========================
@@ -199,7 +200,7 @@ async def generate_server_info_image(
     )
 
     # === 创建最终画布 ===
-    img = Image.new("RGB", (600, total_height), color=BG_COLOR)
+    img = Image.new("RGB", (width, total_height), color=BG_COLOR)
     draw = ImageDraw.Draw(img)
 
     # === 图标 ===
@@ -252,7 +253,7 @@ async def generate_server_info_image(
 
     # === 玩家列表标题 ===
     draw.text((text_x, y_offset), "玩家列表", font=subtitle_font, fill=ACCENT_COLOR)
-    y_offset += 35
+    y_offset += 25
 
     # === 玩家列表卡片 ===
     players_start_y = y_offset
