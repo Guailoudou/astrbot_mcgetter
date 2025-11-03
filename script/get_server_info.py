@@ -23,7 +23,7 @@ async def get_server_status(host):
         plays_max = status.players.max
         plays_online = status.players.online
         server_version = status.version.name
-        # motd = status.motd
+        motd_html = status.motd.to_html()
 
         # 保存服务器图标
         if status.icon:
@@ -56,6 +56,7 @@ async def get_server_status(host):
             "plays_max": plays_max,  # 最大玩家数
             "plays_online": plays_online,  # 在线玩家数
             "server_version": server_version,  # 服务器游戏版本
+            "motd_html": motd_html,
             "icon_base64": icon_data,  # 服务器图标base64
         }
 

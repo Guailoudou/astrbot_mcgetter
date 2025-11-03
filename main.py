@@ -376,6 +376,7 @@ class MyPlugin(Star):
                 plays_max=info['plays_max'],
                 plays_online=info['plays_online'],
                 server_version=info['server_version'],
+                motd_html=info['motd_html'],
                 icon_base64=info['icon_base64']
             )
             logger.info(f"成功生成服务器 {server_name} 的图片")
