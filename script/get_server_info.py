@@ -17,14 +17,14 @@ async def get_server_status(host):
         server = await JavaServer.async_lookup(host)
         # 使用异步方法查询服务器状态
         status = await server.async_status()
-        logger.info(f"获取服务器信息成功: {host} : {status}")
+        # logger.info(f"获取服务器信息成功: {host} : {status}")
         players_list = []
         latency = int(status.latency)
         plays_max = status.players.max
         plays_online = status.players.online
         server_version = status.version.name
-        motd_html = status.motd.to_html()
-        logger.info(f"获取服务器motd成功: {motd_html}")
+        motd = status.motd.to_minecraft()
+        # logger.info(f"获取服务器motd成功: {motd_html}")
         # 保存服务器图标
         if status.icon:
             icon_data = status.icon.split(",")[1]
@@ -56,7 +56,7 @@ async def get_server_status(host):
             "plays_max": plays_max,  # 最大玩家数
             "plays_online": plays_online,  # 在线玩家数
             "server_version": server_version,  # 服务器游戏版本
-            "motd_html": motd_html,
+            "motd": motd,
             "icon_base64": icon_data,  # 服务器图标base64
         }
 
