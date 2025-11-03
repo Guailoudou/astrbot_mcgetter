@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 import asyncio
-import io
+import io,re
 from pathlib import Path
 import base64
 from typing import Optional
@@ -48,9 +48,8 @@ async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]
         print(f"Base64图标解码失败: {str(e)}")
         return None
 
-import asyncio
-import base64
-import io
+
+
 from typing import Optional, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont,ImageColor
