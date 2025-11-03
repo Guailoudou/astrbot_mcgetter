@@ -96,22 +96,23 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     return result
 
 
-def wrap_text_by_width(
+def wrap_line_by_width(
     draw: ImageDraw.ImageDraw,
     text: str,
     font: ImageFont.FreeTypeFont,
     max_width: int
 ) -> List[str]:
-    """按最大宽度自动换行文本（支持中英文）"""
+    """将一段文本按最大宽度自动换行（支持中英文）"""
     if not text:
         return [""]
 
-    words = list(text)  # 按字符拆分（适合中英文混合）
+    # 使用空格或中文字符作为断点尝试换行
+    words = re.findall(r'\S+|\s+', text)  # 单词或空格
     lines = []
     current_line = ""
 
-    for char in words:
-        test_line = current_line + char
+    for word in words:
+        test_line = current_line + word
         bbox = draw.textbbox((0, 0), test_line, font=font)
         width = bbox[2] - bbox[0]
         if width <= max_width:
@@ -119,7 +120,7 @@ def wrap_text_by_width(
         else:
             if current_line:
                 lines.append(current_line)
-            current_line = char  # 单个字符超宽也强制放入
+            current_line = word  # 新行开始
     if current_line:
         lines.append(current_line)
 
@@ -127,7 +128,7 @@ def wrap_text_by_width(
 
 
 # ========================
-# 主函数：生成服务器信息图（支持 MOTD 自动换行）
+# 主函数：生成服务器信息图（修复换行与布局）
 # ========================
 
 async def generate_server_info_image(
@@ -170,7 +171,7 @@ async def generate_server_info_image(
     # === 解析 MOTD ===
     motd_segments = parse_motd_colors(motd_html)
 
-    # === 创建临时画布用于测量文本宽度 ===
+    # === 创建临时画布用于测量 ===
     temp_img = Image.new("RGB", (1, 1))
     temp_draw = ImageDraw.Draw(temp_img)
 
@@ -179,20 +180,42 @@ async def generate_server_info_image(
     padding_x = 20
     icon_size = 64 if server_icon else 0
     text_x = padding_x + icon_size + 15
-    line_height = 32  # MOTD 行高
+    line_height = 32
     motd_max_width = width - 2 * padding_x - 20  # 卡片内可用宽度
 
-    # === 自动换行 MOTD 并计算所需高度 ===
+    # === 合并颜色段并换行 ===
     wrapped_lines = []  # [(line_text, color), ...]
-    for text, color in motd_segments:
-        if not text:
-            wrapped_lines.append(("", color))  # 空行
-        else:
-            lines = wrap_text_by_width(temp_draw, text, motd_font, motd_max_width)
-            for line in lines:
-                wrapped_lines.append((line, color))
+    current_line = ""
+    current_color = None
 
-    motd_height = max(60, len(wrapped_lines) * line_height + 20)
+    for text, color in motd_segments:
+        if text == "":
+            if current_line:
+                wrapped_lines.append((current_line, current_color))
+                current_line = ""
+            wrapped_lines.append(("", None))  # 空行
+            current_color = None
+        else:
+            # 添加到当前行
+            new_line = current_line + text
+            # 测试是否需要换行
+            bbox = temp_draw.textbbox((0, 0), new_line, font=motd_font)
+            if bbox[2] - bbox[0] > motd_max_width:
+                # 需要换行
+                if current_line:
+                    wrapped_lines.append((current_line, current_color))
+                current_line = text
+                current_color = color
+            else:
+                current_line = new_line
+                current_color = color
+
+    # 提交最后一行
+    if current_line:
+        wrapped_lines.append((current_line, current_color))
+
+    # === 计算 MOTD 高度（动态）===
+    motd_height = len(wrapped_lines) * line_height + 20
 
     # === 玩家列表高度 ===
     player_chunks = [players_list[i:i+4] for i in range(0, len(players_list), 4)]
@@ -248,11 +271,11 @@ async def generate_server_info_image(
         width=1
     )
 
-    # === 绘制换行后的 MOTD ===
+    # === 绘制 MOTD ===
     current_y = motd_y + 10
     for line_text, color in wrapped_lines:
         if line_text == "":
-            current_y += line_height  # 空行
+            current_y += line_height
         else:
             draw.text((padding_x + 10, current_y), line_text, font=motd_font, fill=color)
             current_y += line_height
