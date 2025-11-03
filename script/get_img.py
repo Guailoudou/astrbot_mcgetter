@@ -4,7 +4,6 @@ import io,re
 from pathlib import Path
 import base64
 from typing import Optional, List, Tuple
-
 async def load_font(font_size):
     # 尝试多路径加载
     font_paths = [
@@ -42,9 +41,6 @@ async def fetch_icon(icon_base64: Optional[str] = None) -> Optional[Image.Image]
     except Exception as e:
         print(f"Base64图标解码失败: {str(e)}")
         return None
-
-from PIL import Image, ImageDraw, ImageFont,ImageColor
-from PIL.Image import Image as PILImage
 
 def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     """解析 MOTD 颜色代码，返回 (文本, RGB) 列表"""
@@ -96,9 +92,68 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     
     return result
 
+def render_motd_mc_style(parsed_motd: List[Tuple[str, Tuple[int, int, int]]], 
+                        max_width: int, font_measure_func, 
+                        max_lines: int = 2) -> List[List[Tuple[str, Tuple[int, int, int]]]]:
+    """
+    Minecraft风格的MOTD渲染，不同颜色在同一行显示，超过宽度才换行
+    
+    Args:
+        parsed_motd: 解析后的MOTD文本段列表
+        max_width: 最大行宽度（像素）
+        font_measure_func: 字体测量函数，接受文本和字体，返回宽度
+        max_lines: 最大显示行数，默认2行
+        
+    Returns:
+        按行组织的文本段和颜色列表，每行是[(text, color), ...]
+    """
+    # 合并所有文本段，保留颜色信息
+    all_segments = []
+    for text, color in parsed_motd:
+        if text:  # 跳过空文本
+            all_segments.append((text, color))
+    
+    if not all_segments:
+        return [[("无服务器描述", (150, 150, 150))]]
+    
+    lines = []
+    current_line = []
+    current_line_text = ""
+    
+    # 逐段添加到当前行，直到超过最大宽度
+    for text, color in all_segments:
+        # 尝试添加当前段
+        test_text = current_line_text + text
+        test_width = font_measure_func(test_text)
+        
+        if test_width <= max_width:
+            # 可以添加到当前行
+            current_line.append((text, color))
+            current_line_text = test_text
+        else:
+            # 超过宽度，需要换行
+            if current_line:  # 如果当前行不为空
+                lines.append(current_line)
+                if len(lines) >= max_lines:
+                    break  # 达到最大行数，停止处理
+            
+            # 开始新行
+            current_line = [(text, color)]
+            current_line_text = text
+    
+    # 添加最后一行
+    if current_line and len(lines) < max_lines:
+        lines.append(current_line)
+    
+    # 如果没有内容，添加默认文本
+    if not lines:
+        lines.append([("无服务器描述", (150, 150, 150))])
+    
+    return lines
+
 
 # ========================
-# 主函数：生成服务器信息图（最终版）
+# 主函数：生成服务器信息图（Minecraft风格MOTD）
 # ========================
 
 async def generate_server_info_image(
@@ -153,44 +208,21 @@ async def generate_server_info_image(
     line_height = 32
     motd_max_width = width - 2 * padding_x - 20  # 卡片内可用宽度
 
-    # === 每个段单独换行（保留颜色）===
-    wrapped_lines = []  # [(line_text, color), ...]
-    current_line = ""
-    current_color = (255, 255, 255)
+    # === Minecraft风格MOTD渲染 ===
+    # 创建字体测量函数
+    def measure_text_width(text):
+        try:
+            bbox = temp_draw.textbbox((0, 0), text, font=motd_font)
+            return bbox[2] - bbox[0]
+        except:
+            # 如果字体有问题，使用简单长度估算
+            return len(text) * 12  # 估算字符宽度
 
-    for text, color in motd_segments:
-        if text == "":
-            if current_line:
-                wrapped_lines.append((current_line, current_color))
-                current_line = ""
-            wrapped_lines.append(("", (255, 255, 255)))  # 空行
-            current_color = (255, 255, 255)
-        else:
-            # 添加到当前行
-            new_line = current_line + text
-            try:
-                bbox = temp_draw.textbbox((0, 0), new_line, font=motd_font)
-                text_width = bbox[2] - bbox[0]
-            except:
-                # 如果字体有问题，使用简单长度估算
-                text_width = len(new_line) * 12  # 估算字符宽度
-            
-            if text_width <= motd_max_width:
-                current_line = new_line
-                current_color = color
-            else:
-                # 换行
-                if current_line:
-                    wrapped_lines.append((current_line, current_color))
-                current_line = text
-                current_color = color
+    # Minecraft风格渲染MOTD
+    motd_lines = render_motd_mc_style(motd_segments, motd_max_width, measure_text_width, max_lines=2)
 
-    # 提交最后一行
-    if current_line:
-        wrapped_lines.append((current_line, current_color))
-
-    # === 计算 MOTD 高度 ===
-    motd_height = len(wrapped_lines) * line_height + 20
+    # === 计算 MOTD 高度（最多2行）===
+    motd_height = min(len(motd_lines), 2) * line_height + 20
 
     # === 玩家列表高度 ===
     player_chunks = [players_list[i:i+4] for i in range(0, len(players_list), 4)]
@@ -246,14 +278,19 @@ async def generate_server_info_image(
         width=1
     )
 
-    # === 绘制 MOTD ===
+    # === 绘制 MOTD（Minecraft风格）===
     current_y = motd_y + 10
-    for line_text, color in wrapped_lines:
-        if line_text == "":
-            current_y += line_height
-        else:
-            draw.text((padding_x + 10, current_y), line_text, font=motd_font, fill=color)
-            current_y += line_height
+    for line_segments in motd_lines[:2]:  # 最多显示2行
+        current_x = padding_x + 10
+        for text, color in line_segments:
+            draw.text((current_x, current_y), text, font=motd_font, fill=color)
+            # 测量文本宽度，更新x坐标
+            try:
+                bbox = draw.textbbox((current_x, current_y), text, font=motd_font)
+                current_x = bbox[2]
+            except:
+                current_x += len(text) * 12  # 估算宽度
+        current_y += line_height
 
     y_offset = motd_y + motd_height + 20
 
@@ -289,6 +326,3 @@ async def generate_server_info_image(
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-
-
