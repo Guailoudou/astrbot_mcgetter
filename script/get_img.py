@@ -338,7 +338,8 @@ async def generate_server_info_image(
         # 创建圆形图标
         mask = Image.new("L", (icon_size, icon_size), 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, icon_size, icon_size), fill=255,radius=12)
+        mask_draw.rounded_rectangle((0, 0, icon_size, icon_size), radius=12, fill=255)
+        # mask_draw.ellipse((0, 0, icon_size, icon_size), fill=255)
         
         # 调整图标大小并应用圆形遮罩
         server_icon = server_icon.resize((icon_size, icon_size), Image.LANCZOS)
