@@ -380,7 +380,7 @@ async def generate_server_info_image(
     )
     
     # 绘制延迟指示器
-    latency_x = width - padding_x - 180
+    latency_x = width - padding_x - 200
     draw_text_with_shadow(
         draw, 
         (latency_x, y_offset), 
@@ -393,7 +393,7 @@ async def generate_server_info_image(
     # 添加延迟条形图
     bar_width = 100
     bar_height = 8
-    bar_x = latency_x + 80
+    bar_x = latency_x + 100
     bar_y = y_offset + 8
     
     # 背景条
