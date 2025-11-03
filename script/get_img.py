@@ -199,7 +199,7 @@ async def generate_server_info_image(
     )
 
     # === 创建最终画布 ===
-    img = Image.new("RGB", (width, total_height), color=BG_COLOR)
+    img = Image.new("RGB", (600, total_height), color=BG_COLOR)
     draw = ImageDraw.Draw(img)
 
     # === 图标 ===
