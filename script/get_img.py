@@ -188,7 +188,7 @@ async def generate_server_info_image(
 
     # === 玩家列表高度 ===
     player_chunks = [players_list[i:i+4] for i in range(0, len(players_list), 4)]
-    players_height = len(player_chunks) * 60 + 20
+    players_height = len(player_chunks) * 50 + 20
 
     # === 总高度 ===
     total_height = (
@@ -196,7 +196,7 @@ async def generate_server_info_image(
         motd_height +       # 动态 MOTD 高度
         30 +                # "玩家列表" 标题
         players_height +    # 玩家列表
-        20                 # 底部留白
+        50                 # 底部留白
     )
 
     # === 创建最终画布 ===
