@@ -3,7 +3,6 @@ import asyncio
 import io,re
 from pathlib import Path
 import base64
-from typing import Optional
 from typing import Optional, List, Tuple
 
 async def load_font(font_size):
@@ -60,6 +59,9 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
         'r': (255, 255, 255)  # 重置为白色
     }
 
+    # 正确的正则表达式，匹配颜色代码
+    pattern = r'§([0-9a-fr])'
+    
     # 分割行
     lines = motd.split('\n')
     result = []
@@ -70,20 +72,27 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
             continue
 
         # 使用正则表达式分割，保留分隔符
-        parts = re.split(r'(§[0-9a-fr])', line)
+        parts = re.split(pattern, line)
         
         current_color = (255, 255, 255)  # 默认白色
         
-        for part in parts:
-            if part.startswith('§'):
-                # 这是一个颜色代码
-                color_code = part[1]  # 获取颜色字符
-                if color_code in color_map:
-                    current_color = color_map[color_code]
-            else:
-                # 这是文本内容
+        i = 0
+        while i < len(parts):
+            part = parts[i]
+            # 检查下一个元素是否是颜色代码
+            if i + 1 < len(parts) and parts[i+1] in color_map:
+                # 当前部分是文本，下一部分是颜色代码
                 if part:
                     result.append((part, current_color))
+                
+                # 更新颜色
+                current_color = color_map[parts[i+1]]
+                i += 2  # 跳过颜色代码
+            else:
+                # 当前部分是文本
+                if part:
+                    result.append((part, current_color))
+                i += 1
     
     return result
 
