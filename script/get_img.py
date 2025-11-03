@@ -53,35 +53,40 @@ import base64
 import io
 from typing import Optional, List, Tuple
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont,ImageColor
 from PIL.Image import Image as PILImage
-
 def parse_motd_colors(motd_html: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     """
-    示例解析器，假设返回 [(文本, (R,G,B)), ...]
-    实际应解析 HTML 格式（如 §a 文本等），这里简化
+    解析MOTD字符串中的颜色代码，并返回带有颜色的文本片段列表。
+    Minecraft颜色代码以 § 开始，后面跟一个代表颜色或样式的字符。
     """
-    # 示例：返回带颜色的文本片段
-    if not motd_html.strip():
-        return [("无服务器描述", (150, 150, 150))]
-    
-    # 模拟解析结果
-    colors = {
-        'green': (85, 255, 85),
-        'yellow': (255, 255, 0),
-        'white': (255, 255, 255),
-        'red': (255, 85, 85),
-        'blue': (85, 85, 255),
+    color_map = {
+        '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
+        '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
+        '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
+        'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF',
     }
     segments = []
-    for line in motd_html.split('\n'):
-        if line.startswith('§'):
-            color_code = line[1:2]  # §a → a
-            color = colors.get(color_code, (255, 255, 255))
-            text = line[2:]
-            segments.append((text, color))
-        else:
-            segments.append((line, (255, 255, 255)))
+    text_buffer = ""
+    current_color = None
+    
+    # 移除开头和结尾的空白行
+    motd_lines = [line for line in motd_html.split('\n') if line.strip()]
+    
+    for line in motd_lines:
+        parts = re.findall(r'§([0-9a-f])|([^§]+)', line)
+        for part in parts:
+            if part[0]:  # 颜色代码
+                if text_buffer and current_color:
+                    segments.append((text_buffer, ImageColor.getrgb(current_color)))
+                    text_buffer = ""
+                current_color = color_map.get(part[0], '#FFFFFF')
+            else:  # 文本部分
+                text_buffer += part[1]
+        if text_buffer and current_color:
+            segments.append((text_buffer, ImageColor.getrgb(current_color)))
+            text_buffer = ""
+    
     return segments
 
 
@@ -95,23 +100,22 @@ async def generate_server_info_image(
     motd_html: str,
     icon_base64: Optional[str] = None
 ) -> str:
-    """生成现代风格的服务器信息图片并返回base64编码"""
+    """生成现代风格的服务器信息图片，返回 PNG base64 字符串"""
 
-    # 异步获取图标
+    # === 加载资源 ===
     server_icon = await fetch_icon(icon_base64)
 
-    # 配置参数 - 更现代的配色方案
+    # === 配色方案（现代暗色主题）===
     BG_COLOR = (20, 20, 20)
     TEXT_COLOR = (220, 220, 220)
-    ACCENT_COLOR = (85, 255, 85)  # 主色绿
-    WARNING_COLOR = (255, 170, 0)
-    ERROR_COLOR = (255, 85, 85)
-    SECTION_BG = (30, 30, 30)  # 卡片背景
-    CARD_BORDER = (40, 40, 40)  # 卡片边框
-    SHADOW_COLOR = (0, 0, 0, 30)  # 半透明阴影
-    RADIUS = 12  # 圆角半径
+    ACCENT_COLOR = (85, 255, 85)      # 主色（绿色）
+    WARNING_COLOR = (255, 170, 0)     # 警告（橙色）
+    ERROR_COLOR = (255, 85, 85)       # 错误（红色）
+    SECTION_BG = (30, 30, 30)         # 卡片背景
+    CARD_BORDER = (50, 50, 50)        # 卡片边框
+    RADIUS = 12                       # 圆角半径
 
-    # 字体配置
+    # === 字体 ===
     try:
         title_font = await load_font(28)
         subtitle_font = await load_font(20)
@@ -125,109 +129,100 @@ async def generate_server_info_image(
         small_font = ImageFont.load_default()
         motd_font = ImageFont.load_default()
 
-    # 解析MOTD
+    # === 解析 MOTD ===
     motd_segments = parse_motd_colors(motd_html)
 
-    # 计算布局
-    icon_size = 64 if server_icon else 0
+    # === 布局参数 ===
+    width = 600
     padding_x = 20
-    padding_y = 15
-    spacing = 20
+    icon_size = 64 if server_icon else 0
+    text_x = padding_x + icon_size + 15
     line_height = 30
 
-    # 计算高度
-    player_lines = (len(players_list) // 4) + 1
-    motd_lines = max(1, len([seg for seg in motd_segments if seg[0]]))
-    header_height = 100
-    motd_height = max(40, motd_lines * line_height)
-    players_height = player_lines * line_height
+    # 固定 MOTD 区域高度（两行，即使内容少也占满）
+    FIXED_MOTD_HEIGHT = 80  # 足够显示两行带间距的文本
+
+    # 玩家列表行数（每行最多4人）
+    player_chunks = [players_list[i:i+4] for i in range(0, len(players_list), 4)]
+    players_height = max(40, len(player_chunks) * line_height)
+
+    # 总高度计算
     total_height = (
-        header_height + 
-        motd_height + 
-        players_height + 
-        4 * spacing
+        100 +               # 顶部信息区
+        FIXED_MOTD_HEIGHT + # MOTD 固定区域
+        30 +                # "玩家列表" 标题
+        players_height +    # 玩家列表内容
+        40                 # 底部留白
     )
 
-    # 创建画布
-    width = 600
-    img = Image.new("RGBA", (width, total_height), color=BG_COLOR)
+    # === 创建画布 ===
+    img = Image.new("RGB", (width, total_height), color=BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    # 添加轻微阴影（模拟浮起效果）
-    shadow_img = Image.new("RGBA", (width, total_height), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow_img)
-    shadow_draw.rounded_rectangle(
-        [padding_x+1, padding_y+1, width-padding_x-1, total_height-padding_y-1],
-        radius=RADIUS,
-        fill=SHADOW_COLOR
-    )
-    img.paste(shadow_img, (0, 0), shadow_img)
-
-    # 绘制主内容区域
-    x_start = padding_x + icon_size + 10
-    y_start = padding_y
-
-    # 服务器图标
+    # === 绘制服务器图标（圆形）===
+    y_offset = 20
     if server_icon:
-        mask = Image.new("L", (64, 64), 0)
+        mask = Image.new("L", (icon_size, icon_size), 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, 64, 64), fill=255)  # 圆形蒙版
-        server_icon.thumbnail((64, 64))
-        img.paste(server_icon, (padding_x, y_start), mask)
+        mask_draw.ellipse((0, 0, icon_size, icon_size), fill=255)
+        server_icon = server_icon.resize((icon_size, icon_size), Image.LANCZOS)
+        img.paste(server_icon, (padding_x, y_offset), mask)
 
-    # 服务器名称
-    draw.text((x_start, y_start), server_name, font=title_font, fill=ACCENT_COLOR)
-    y_start += 35
+    # === 服务器名称 ===
+    draw.text((text_x, y_offset), server_name, font=title_font, fill=ACCENT_COLOR)
+    y_offset += 35
 
-    # 版本 & 延迟
+    # === 版本 & 延迟 ===
     version_text = f"版本: {server_version}"
     latency_color = ACCENT_COLOR if latency < 100 else WARNING_COLOR if latency < 200 else ERROR_COLOR
     latency_text = f"延迟: {latency}ms"
 
-    draw.text((x_start, y_start), version_text, font=text_font, fill=TEXT_COLOR)
-    draw.text((width - 150, y_start), latency_text, font=text_font, fill=latency_color)
-    y_start += 30
+    draw.text((text_x, y_offset), version_text, font=text_font, fill=TEXT_COLOR)
+    draw.text((width - 150, y_offset), latency_text, font=text_font, fill=latency_color)
+    y_offset += 30
 
-    # 在线玩家数
+    # === 在线玩家数 ===
     online_text = f"在线玩家 ({plays_online}/{plays_max})"
-    draw.text((x_start, y_start), online_text, font=text_font, fill=ACCENT_COLOR)
-    y_start += 40
+    draw.text((text_x, y_offset), online_text, font=text_font, fill=ACCENT_COLOR)
+    y_offset += 40
 
-    # MOTD 区域（卡片式）
-    motd_y = y_start
+    # === MOTD 区域（固定高度）===
+    motd_y = y_offset
     draw.rounded_rectangle(
-        [padding_x, motd_y, width - padding_x, motd_y + motd_height],
+        [padding_x, motd_y, width - padding_x, motd_y + FIXED_MOTD_HEIGHT],
         radius=RADIUS,
         fill=SECTION_BG,
         outline=CARD_BORDER,
         width=1
     )
 
-    # 绘制 MOTD 文本（支持多行 + 颜色）
+    # 绘制 MOTD 文本（支持颜色）
     current_y = motd_y + 10
-    current_x = x_start + 10
+    current_x = text_x + 10
     for text, color in motd_segments:
         if text:
             draw.text((current_x, current_y), text, font=motd_font, fill=color)
-            # 粗略估算宽度
-            w = len(text) * 14
-            current_x += w
-            if current_x > width - 200:
-                current_x = x_start + 10
-                current_y += line_height
+            # 精确计算文本宽度（避免重叠）
+            bbox = draw.textbbox((0, 0), text, font=motd_font)
+            text_width = bbox[2] - bbox[0]
+            current_x += text_width + 4  # 小间距
         else:
+            # 空行：换行
             current_y += line_height
-            current_x = x_start + 10
-    y_start = motd_y + motd_height + 20
+            current_x = text_x + 10
+            if current_y >= motd_y + FIXED_MOTD_HEIGHT - 10:
+                break  # 防止溢出
 
-    # 玩家列表区域
-    draw.text((x_start, y_start), "玩家列表", font=subtitle_font, fill=ACCENT_COLOR)
-    y_start += 25
+    y_offset = motd_y + FIXED_MOTD_HEIGHT + 20
 
-    # 玩家列表卡片
-    players_y = y_start
+    # === 玩家列表标题 ===
+    draw.text((text_x, y_offset), "玩家列表", font=subtitle_font, fill=ACCENT_COLOR)
+    y_offset += 25
+
+    # === 玩家列表卡片 ===
+    players_start_y = y_offset
     draw.rounded_rectangle(
-        [padding_x, players_y, width - padding_x, players_y + players_height + 10],
+        [padding_x, players_start_y, width - padding_x, players_start_y + players_height],
         radius=RADIUS,
         fill=SECTION_BG,
         outline=CARD_BORDER,
@@ -235,23 +230,22 @@ async def generate_server_info_image(
     )
 
     # 绘制玩家名字
-    current_y = players_y + 10
-    for i, chunk in enumerate([players_list[j:j+4] for j in range(0, len(players_list), 4)]):
+    current_y = players_start_y + 10
+    for chunk in player_chunks:
         players_line = " • ".join(chunk)
-        draw.text((x_start + 10, current_y), players_line, font=small_font, fill=TEXT_COLOR)
+        draw.text((text_x + 10, current_y), players_line, font=small_font, fill=TEXT_COLOR)
         current_y += line_height
 
-    # 整体边框（外层）
+    # === 外层边框（装饰）===
     draw.rounded_rectangle(
-        [padding_x, padding_y, width - padding_x, total_height - padding_y],
+        [10, 10, width - 10, total_height - 10],
         radius=RADIUS,
         outline=ACCENT_COLOR,
         width=2
     )
 
-    # 转为 base64
+    # === 输出 base64 ===
     buffer = io.BytesIO()
-    img.convert("RGB").save(buffer, format="PNG")
+    img.save(buffer, format="PNG", optimize=True)
     img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
     return img_base64
