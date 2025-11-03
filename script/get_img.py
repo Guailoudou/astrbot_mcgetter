@@ -75,23 +75,21 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
             result.append(("", (255, 255, 255)))
             continue
 
-        parts = re.findall(r'§([0-9a-f])|([^§]+)', line)
+        # 修改正则表达式，使其能正确捕获所有情况
+        parts = re.findall(r'§([0-9a-fr])|([^§]+)|§', line)
         current_color = color_map.get('f', '#FFFFFF')
-        text_buffer = ""
 
-        for code, text in parts:
-            if code:
-                if text_buffer:
-                    rgb = ImageColor.getrgb(current_color)
-                    result.append((text_buffer, rgb))
-                    text_buffer = ""
-                current_color = color_map.get(code, '#FFFFFF')
-            else:
-                text_buffer += text
-
-        if text_buffer:
-            rgb = ImageColor.getrgb(current_color)
-            result.append((text_buffer, rgb))
+        for code, text, invalid in parts:
+            if invalid:  # 处理无效的§字符
+                result.append(("§", ImageColor.getrgb(current_color)))
+            elif code:  # 处理颜色代码
+                if code == 'r':
+                    current_color = color_map['f']  # 重置为默认白色
+                else:
+                    current_color = color_map.get(code, '#FFFFFF')
+            elif text:  # 处理普通文本
+                rgb = ImageColor.getrgb(current_color)
+                result.append((text, rgb))
 
     return result
 
@@ -196,7 +194,7 @@ async def generate_server_info_image(
         motd_height +       # 动态 MOTD 高度
         30 +                # "玩家列表" 标题
         players_height +    # 玩家列表
-        50                 # 底部留白
+        70                 # 底部留白
     )
 
     # === 创建最终画布 ===
@@ -253,7 +251,7 @@ async def generate_server_info_image(
 
     # === 玩家列表标题 ===
     draw.text((text_x, y_offset), "玩家列表", font=subtitle_font, fill=ACCENT_COLOR)
-    y_offset += 25
+    y_offset += 35
 
     # === 玩家列表卡片 ===
     players_start_y = y_offset
