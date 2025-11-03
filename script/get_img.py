@@ -246,7 +246,7 @@ async def generate_server_info_image(
     if server_icon:
         mask = Image.new("L", (icon_size, icon_size), 0)
         mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, icon_size, icon_size), fill=255)
+        mask_draw.rounded_rectangle((0, 0, icon_size, icon_size), radius=12, fill=255)
         server_icon = server_icon.resize((icon_size, icon_size), Image.LANCZOS)
         img.paste(server_icon, (padding_x, y_offset), mask)
 
