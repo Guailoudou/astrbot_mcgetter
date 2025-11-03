@@ -380,7 +380,7 @@ async def generate_server_info_image(
     )
     
     # 绘制延迟指示器
-    latency_x = width - padding_x - 150
+    latency_x = width - padding_x - 180
     draw_text_with_shadow(
         draw, 
         (latency_x, y_offset), 
@@ -427,7 +427,7 @@ async def generate_server_info_image(
     # 添加玩家数量指示器
     player_bar_width = 150
     player_bar_height = 10
-    player_bar_x = text_x + len(online_text) * 10 + 10
+    player_bar_x = text_x + len(online_text) * 10 + 30
     player_bar_y = y_offset + 5
     
     # 背景条
