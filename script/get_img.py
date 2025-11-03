@@ -55,20 +55,16 @@ from typing import Optional, List, Tuple
 from PIL import Image, ImageDraw, ImageFont,ImageColor
 from PIL.Image import Image as PILImage
 def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
-    """
-    正确解析 Minecraft MOTD 颜色代码，跳过 § 符号本身。
-    支持多行，自动合并连续文本。
-    """
+    """解析 MOTD 颜色代码，返回 (文本, RGB) 列表"""
     if not motd.strip():
         return [("无服务器描述", (150, 150, 150))]
 
-    # 颜色映射表（§x 对应 RGB）
     color_map = {
         '0': '#000000', '1': '#0000AA', '2': '#00AA00', '3': '#00AAAA',
         '4': '#AA0000', '5': '#AA00AA', '6': '#FFAA00', '7': '#AAAAAA',
         '8': '#555555', '9': '#5555FF', 'a': '#55FF55', 'b': '#55FFFF',
         'c': '#FF5555', 'd': '#FF55FF', 'e': '#FFFF55', 'f': '#FFFFFF',
-        'r': '#FFFFFF'  # 重置颜色
+        'r': '#FFFFFF'
     }
 
     lines = motd.split('\n')
@@ -79,14 +75,12 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
             result.append(("", (255, 255, 255)))
             continue
 
-        # 使用正则匹配：§[0-9a-f] 或其他非§字符
         parts = re.findall(r'§([0-9a-f])|([^§]+)', line)
-        current_color = color_map.get('f', '#FFFFFF')  # 默认白色
+        current_color = color_map.get('f', '#FFFFFF')
         text_buffer = ""
 
         for code, text in parts:
             if code:
-                # 遇到颜色代码：提交当前缓冲区，并更新颜色
                 if text_buffer:
                     rgb = ImageColor.getrgb(current_color)
                     result.append((text_buffer, rgb))
@@ -95,7 +89,6 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
             else:
                 text_buffer += text
 
-        # 提交最后一段
         if text_buffer:
             rgb = ImageColor.getrgb(current_color)
             result.append((text_buffer, rgb))
@@ -103,8 +96,38 @@ def parse_motd_colors(motd: str) -> List[Tuple[str, Tuple[int, int, int]]]:
     return result
 
 
+def wrap_text_by_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    max_width: int
+) -> List[str]:
+    """按最大宽度自动换行文本（支持中英文）"""
+    if not text:
+        return [""]
+
+    words = list(text)  # 按字符拆分（适合中英文混合）
+    lines = []
+    current_line = ""
+
+    for char in words:
+        test_line = current_line + char
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        width = bbox[2] - bbox[0]
+        if width <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = char  # 单个字符超宽也强制放入
+    if current_line:
+        lines.append(current_line)
+
+    return lines
+
+
 # ========================
-# 主函数：生成服务器信息图
+# 主函数：生成服务器信息图（支持 MOTD 自动换行）
 # ========================
 
 async def generate_server_info_image(
@@ -117,12 +140,10 @@ async def generate_server_info_image(
     motd_html: str,
     icon_base64: Optional[str] = None
 ) -> str:
-    """生成现代风格的服务器信息图片，返回 PNG base64 字符串"""
-
     # === 加载资源 ===
     server_icon = await fetch_icon(icon_base64)
 
-    # === 配色方案 ===
+    # === 配色 ===
     BG_COLOR = (20, 20, 20)
     TEXT_COLOR = (220, 220, 220)
     ACCENT_COLOR = (85, 255, 85)
@@ -149,30 +170,44 @@ async def generate_server_info_image(
     # === 解析 MOTD ===
     motd_segments = parse_motd_colors(motd_html)
 
+    # === 创建临时画布用于测量文本宽度 ===
+    temp_img = Image.new("RGB", (1, 1))
+    temp_draw = ImageDraw.Draw(temp_img)
+
     # === 布局参数 ===
     width = 600
     padding_x = 20
     icon_size = 64 if server_icon else 0
     text_x = padding_x + icon_size + 15
-    line_height = 30
+    line_height = 32  # MOTD 行高
+    motd_max_width = width - 2 * padding_x - 20  # 卡片内可用宽度
 
-    # 固定 MOTD 区域高度（确保足够）
-    FIXED_MOTD_HEIGHT = 80
+    # === 自动换行 MOTD 并计算所需高度 ===
+    wrapped_lines = []  # [(line_text, color), ...]
+    for text, color in motd_segments:
+        if not text:
+            wrapped_lines.append(("", color))  # 空行
+        else:
+            lines = wrap_text_by_width(temp_draw, text, motd_font, motd_max_width)
+            for line in lines:
+                wrapped_lines.append((line, color))
 
-    # 玩家列表高度（每行最多 4 人）
+    motd_height = max(60, len(wrapped_lines) * line_height + 20)
+
+    # === 玩家列表高度 ===
     player_chunks = [players_list[i:i+4] for i in range(0, len(players_list), 4)]
-    players_height = len(player_chunks) * line_height + 50
+    players_height = len(player_chunks) * 28 + 10
 
-    # 总高度
+    # === 总高度 ===
     total_height = (
         100 +               # 头部
-        FIXED_MOTD_HEIGHT + # MOTD
+        motd_height +       # 动态 MOTD 高度
         30 +                # "玩家列表" 标题
         players_height +    # 玩家列表
-        30                 # 底部留白
+        20                 # 底部留白
     )
 
-    # === 创建画布 ===
+    # === 创建最终画布 ===
     img = Image.new("RGB", (width, total_height), color=BG_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -203,31 +238,26 @@ async def generate_server_info_image(
     draw.text((text_x, y_offset), online_text, font=text_font, fill=ACCENT_COLOR)
     y_offset += 40
 
-    # === MOTD 区域 ===
+    # === MOTD 卡片 ===
     motd_y = y_offset
     draw.rounded_rectangle(
-        [padding_x, motd_y, width - padding_x, motd_y + FIXED_MOTD_HEIGHT],
+        [padding_x, motd_y, width - padding_x, motd_y + motd_height],
         radius=RADIUS,
         fill=SECTION_BG,
         outline=CARD_BORDER,
         width=1
     )
 
-    # 绘制 MOTD 文本
+    # === 绘制换行后的 MOTD ===
     current_y = motd_y + 10
-    current_x = text_x + 10
-    for text, color in motd_segments:
-        if text:
-            draw.text((current_x, current_y), text, font=motd_font, fill=color)
-            bbox = draw.textbbox((0, 0), text, font=motd_font)
-            text_width = bbox[2] - bbox[0]
-            current_x += text_width + 4
+    for line_text, color in wrapped_lines:
+        if line_text == "":
+            current_y += line_height  # 空行
         else:
+            draw.text((padding_x + 10, current_y), line_text, font=motd_font, fill=color)
             current_y += line_height
-            current_x = text_x + 10
-            if current_y >= motd_y + FIXED_MOTD_HEIGHT - 10:
-                break
-    y_offset = motd_y + FIXED_MOTD_HEIGHT + 20
+
+    y_offset = motd_y + motd_height + 20
 
     # === 玩家列表标题 ===
     draw.text((text_x, y_offset), "玩家列表", font=subtitle_font, fill=ACCENT_COLOR)
@@ -243,12 +273,11 @@ async def generate_server_info_image(
         width=1
     )
 
-    # 绘制玩家名字
     current_y = players_start_y + 10
     for chunk in player_chunks:
         players_line = " • ".join(chunk)
         draw.text((text_x + 10, current_y), players_line, font=small_font, fill=TEXT_COLOR)
-        current_y += line_height
+        current_y += 28
 
     # === 外层边框 ===
     draw.rounded_rectangle(
@@ -261,5 +290,4 @@ async def generate_server_info_image(
     # === 输出 base64 ===
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
-    img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-    return img_base64
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
